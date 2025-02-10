@@ -19,7 +19,7 @@
 #include <utility>
 
 //#define ESVO_CORE_MAPPING_DEBUG
-//#define ESVO_CORE_MAPPING_LOG
+#define ESVO_CORE_MAPPING_LOG
 
 namespace esvo_core
 {
@@ -865,16 +865,56 @@ void esvo_Mapping::onlineParameterChangeCallback(DVS_MappingStereoConfig &config
   }
 }
 
+
+void plot_DepthMap(
+  DepthMap::Ptr &depthMapPtr,
+  cv::Mat &depthImage,
+  double invDepth_max_range_, 
+  double invDepth_min_range_,
+  double visualization_threshold1,
+  double visualization_threshold2) 
+{
+  size_t height = depthMapPtr->rows();
+  size_t width = depthMapPtr->cols();
+  depthImage = cv::Mat(cv::Size(width, height), CV_16UC1, cv::Scalar(0));
+  
+  for (auto it = depthMapPtr->begin(); it != depthMapPtr->end(); it++)
+  {
+    if (it->valid() && it->variance() < pow(visualization_threshold1, 2)
+        && it->age() >= (int) visualization_threshold2)
+    {
+      Eigen::Vector2d location = it->x();
+      double dInvDepth = it->invDepth();
+      if (dInvDepth > invDepth_max_range_) dInvDepth = invDepth_max_range_;
+      if (dInvDepth < invDepth_min_range_) dInvDepth = invDepth_min_range_;
+      
+      int u = location[0];
+      int v = location[1];
+      depthImage.at<ushort>(v, u) = static_cast<ushort>((1 / dInvDepth) * 1000);
+    }
+  }
+
+}
+
+
+
 void esvo_Mapping::publishMappingResults(
   DepthMap::Ptr depthMapPtr,
   Transformation tr,
   ros::Time t)
 {
   cv::Mat invDepthImage, stdVarImage, ageImage, costImage, eventImage, confidenceMap;
+  
+  cv::Mat depthImage;
+  plot_DepthMap(depthMapPtr, depthImage, invDepth_max_range_, invDepth_min_range_, stdVar_vis_threshold_, age_vis_threshold_);
+  std::string timestamp = std::to_string(t.sec) + "." + std::to_string(t.nsec);
+  cv::imwrite("/app/ESVO/result/depth/" + timestamp + ".png", depthImage);
 
+  
   visualizor_.plot_map(depthMapPtr, tools::InvDepthMap, invDepthImage,
                        invDepth_max_range_, invDepth_min_range_, stdVar_vis_threshold_, age_vis_threshold_);
   publishImage(invDepthImage, t, invDepthMap_pub_);
+  cv::imwrite("/app/ESVO/result/inv/" + timestamp + ".png", invDepthImage);
 
   visualizor_.plot_map(depthMapPtr, tools::StdVarMap,stdVarImage,
                        stdVar_vis_threshold_, 0.0, stdVar_vis_threshold_);

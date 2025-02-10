@@ -13,7 +13,8 @@ enum VisMapType
   InvDepthMap,
   StdVarMap,
   CostMap,
-  AgeMap
+  AgeMap,
+  AccInvDepthMap
 };
 class Visualization
 {
