@@ -144,8 +144,7 @@ RUN mkdir ${CODE_DIR}/src && cd ${CODE_DIR}/src && \
     cmake -DCMAKE_INSTALL_PREFIX=/usr . && \
     make && make install
 # build ceres
-RUN apt-get install -y libgoogle-glog-dev libgflags-dev \
-    libatlas-base-dev libeigen3-dev && \
+RUN apt-get install -y libgoogle-glog-dev libgflags-dev libatlas-base-dev && \
     cd ${CODE_DIR}/src && wget http://ceres-solver.org/ceres-solver-2.1.0.tar.gz && \
     tar zxf ceres-solver-2.1.0.tar.gz && \
     mkdir -p ${CODE_DIR}/src/ceres-solver-2.1.0/build && cd ${CODE_DIR}/src/ceres-solver-2.1.0/build && \

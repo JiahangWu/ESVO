@@ -37,6 +37,10 @@
 #include <pcl/point_types.h>
 #include <pcl_ros/point_cloud.h>
 
+#include <H5Cpp.h>
+
+
+
 namespace esvo_core
 {
 using namespace core;
@@ -101,7 +105,9 @@ class esvo_Mapping
     std::vector<dvs_msgs::Event *> &vEdgeEventsPtr,
     cv::Mat& mask,
     size_t maxNum = 5000);
-
+  
+  double time = 0;
+  int time_count = 0;
   /************************ member variables ************************/
   private:
   ros::NodeHandle nh_, pnh_;
@@ -219,6 +225,12 @@ class esvo_Mapping
 
   // For counting the total number of fusion
   size_t TotalNumFusion_;
+  
+  void create_h5(std::string &outpath, cv::Size res);
+  void save_h5(cv::Mat &img, std::string timestamp);
+  
+  H5::DataSet h5_img_dataset, h5_ts_dataset;
+
 };
 }
 

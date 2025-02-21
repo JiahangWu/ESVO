@@ -19,10 +19,72 @@
 #include <utility>
 
 //#define ESVO_CORE_MAPPING_DEBUG
-#define ESVO_CORE_MAPPING_LOG
+// #define ESVO_CORE_MAPPING_LOG
+
+static int img_id = 0;
 
 namespace esvo_core
 {
+  
+void esvo_Mapping::create_h5(std::string &outpath, cv::Size res)
+{
+    H5::H5File h5_file(outpath + "depth.h5", H5F_ACC_TRUNC);
+    
+    hsize_t h5_width = static_cast<hsize_t>(res.width);
+    hsize_t h5_height = static_cast<hsize_t>(res.height);
+    
+    hsize_t init_img_dims[3] = {0, h5_height, h5_width};
+    hsize_t max_img_dims[3] = {H5S_UNLIMITED, h5_height, h5_width};
+    
+    H5::DSetCreatPropList prop;
+    
+    H5::DataSpace img_dataspace(3, init_img_dims, max_img_dims);
+    hsize_t chunk_img_dims[3] = {1, h5_height, h5_width};
+    prop.setChunk(3, chunk_img_dims);
+    h5_img_dataset = h5_file.createDataSet("left", H5::PredType::NATIVE_FLOAT, img_dataspace, prop);
+    
+    hsize_t init_ts_dims[1] = {0};
+    hsize_t max_ts_dims[1] = {H5S_UNLIMITED};
+    
+    H5::DataSpace ts_dataspace(1, init_ts_dims, max_ts_dims);
+    hsize_t chunk_ts_dims[1] = {1};
+    prop.setChunk(1, chunk_ts_dims);
+    H5::StrType strType(H5::PredType::C_S1, H5T_VARIABLE);
+    h5_ts_dataset = h5_file.createDataSet("ts", strType, ts_dataspace, prop);
+}
+
+void esvo_Mapping::save_h5(cv::Mat &img, std::string timestamp)
+{
+    hsize_t h5_width  = static_cast<hsize_t>(img.size().width);
+    hsize_t h5_height = static_cast<hsize_t>(img.size().height);
+    hsize_t i = static_cast<hsize_t>(img_id);
+    std::cout << "________-----_____" << img_id << endl;
+    hsize_t new_img_size[3] = {i + 1, h5_height, h5_width};
+    h5_img_dataset.extend(new_img_size);
+
+    H5::DataSpace filespace_img = h5_img_dataset.getSpace();
+    hsize_t img_offset[3] = {i, 0, 0};
+    hsize_t img_count[3] = {1, h5_height, h5_width};
+    filespace_img.selectHyperslab(H5S_SELECT_SET, img_count, img_offset);
+
+    H5::DataSpace memspace_img(3, img_count);
+    h5_img_dataset.write(img.data, H5::PredType::NATIVE_FLOAT, memspace_img, filespace_img);
+    
+
+    // hsize_t new_ts_size[1] = {i + 1};
+    // h5_ts_dataset.extend(new_ts_size);
+
+    // H5::DataSpace filespace_ts = h5_ts_dataset.getSpace();
+    // hsize_t ts_offset[1] = {i};
+    // hsize_t ts_count[1] = {1};
+    // filespace_ts.selectHyperslab(H5S_SELECT_SET, ts_count, ts_offset);
+
+    // H5::StrType strType(H5::PredType::C_S1, H5T_VARIABLE);
+    // H5::DataSpace memspace_ts(1, ts_count);
+    // h5_ts_dataset.write(&timestamp, strType, memspace_ts, filespace_ts);
+
+}
+  
 esvo_Mapping::esvo_Mapping(
   const ros::NodeHandle &nh,
   const ros::NodeHandle &nh_private)
@@ -114,6 +176,10 @@ esvo_Mapping::esvo_Mapping(
   size_t maxDisparity = size_t(std::ceil(f*b*invDepth_max_range_));
   minDisparity = max(minDisparity, BM_min_disparity_);
   maxDisparity = min(maxDisparity, BM_max_disparity_);
+  
+  // cv::Size save_size = cv::Size(camSysPtr_->cam_left_ptr_->width_, camSysPtr_->cam_left_ptr_->height_);
+  // std::string save_path = "/app/ESVO/result/depth/";
+  // create_h5(save_path, save_size);
 
 #ifdef  ESVO_CORE_MAPPING_DEBUG
   LOG(INFO) << "f: " << f << " " << " b: " << b;
@@ -165,6 +231,8 @@ esvo_Mapping::esvo_Mapping(
   dynamic_reconfigure_callback_ = boost::bind(&esvo_Mapping::onlineParameterChangeCallback, this, _1, _2);
   server_.reset(new dynamic_reconfigure::Server<DVS_MappingStereoConfig>(nh_private));
   server_->setCallback(dynamic_reconfigure_callback_);
+  
+  
 }
 
 esvo_Mapping::~esvo_Mapping()
@@ -176,6 +244,7 @@ esvo_Mapping::~esvo_Mapping()
   costMap_pub_.shutdown();
 }
 
+
 void esvo_Mapping::MappingLoop(
   std::promise<void> prom_mapping,
   std::future<void> future_reset)
@@ -184,6 +253,8 @@ void esvo_Mapping::MappingLoop(
 
   while (ros::ok())
   {
+    time_count++;
+    auto start = std::chrono::high_resolution_clock::now();
     // reset mapping rate
     if(changed_frame_rate_)
     {
@@ -254,8 +325,13 @@ void esvo_Mapping::MappingLoop(
         return;
       }
     }
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> duration = end - start;
+    time += duration.count();
+    time_count++;
     r.sleep();
   }
+  LOG(INFO) << "-----------------Processing time per Loop: " << time / time_count;
 }
 
 void esvo_Mapping::MappingAtTime(const ros::Time& t)
@@ -897,6 +973,51 @@ void plot_DepthMap(
 }
 
 
+void draw_DepthMap(
+  DepthMap::Ptr &depthMapPtr,
+  cv::Mat &depthImage,
+  double invDepth_max_range_, 
+  double invDepth_min_range_,
+  double visualization_threshold1,
+  double visualization_threshold2) 
+{
+  size_t height = depthMapPtr->rows();
+  size_t width = depthMapPtr->cols();
+  depthImage = cv::Mat(cv::Size(width, height), CV_8UC1, cv::Scalar(0));
+  cv::cvtColor(depthImage, depthImage, CV_GRAY2BGR);
+  
+  for (auto it = depthMapPtr->begin(); it != depthMapPtr->end(); it++)
+  {
+    if (it->valid() && it->variance() < pow(visualization_threshold1, 2)
+        && it->age() >= (int) visualization_threshold2)
+    {
+      Eigen::Vector2d location = it->x();
+      double dInvDepth = it->invDepth();
+      if (dInvDepth > invDepth_max_range_) dInvDepth = invDepth_max_range_;
+      if (dInvDepth < invDepth_min_range_) dInvDepth = invDepth_min_range_;
+      
+      
+      double depth = 1 / dInvDepth;
+      double min_range = 1 / invDepth_max_range_;
+      double max_range = 1 / invDepth_min_range_;
+      
+      int index = floor((depth - min_range) / (max_range - min_range) * 255.0f);
+      if (index > 255)
+        index = 255;
+      if (index < 0)
+        index = 0;
+        
+      cv::Point point;
+      cv::Scalar color = CV_RGB(255.0f * Visualization::r[index], 255.0f * Visualization::g[index], 255.0f * Visualization::b[index]);
+      point.x = location[0];
+      point.y = location[1];
+      cv::circle(depthImage, point, 1, color, cv::FILLED);
+      
+    }
+  }
+
+}
+
 
 void esvo_Mapping::publishMappingResults(
   DepthMap::Ptr depthMapPtr,
@@ -905,16 +1026,20 @@ void esvo_Mapping::publishMappingResults(
 {
   cv::Mat invDepthImage, stdVarImage, ageImage, costImage, eventImage, confidenceMap;
   
-  cv::Mat depthImage;
+  cv::Mat depthImage, depth_color;
   plot_DepthMap(depthMapPtr, depthImage, invDepth_max_range_, invDepth_min_range_, stdVar_vis_threshold_, age_vis_threshold_);
   std::string timestamp = std::to_string(t.sec) + "." + std::to_string(t.nsec);
-  cv::imwrite("/app/ESVO/result/depth/" + timestamp + ".png", depthImage);
-
+  // cv::imwrite("/app/Results/ESVO/MVSEC/indoor_flying3/depth/" + timestamp + ".png", depthImage);
+  cv::imwrite("/app/Results/ESVO/RPG/monitor/depth/" + timestamp + ".png", depthImage);
+  // save_h5(depthImage, timestamp);
+  // img_id++;
   
   visualizor_.plot_map(depthMapPtr, tools::InvDepthMap, invDepthImage,
                        invDepth_max_range_, invDepth_min_range_, stdVar_vis_threshold_, age_vis_threshold_);
   publishImage(invDepthImage, t, invDepthMap_pub_);
-  cv::imwrite("/app/ESVO/result/inv/" + timestamp + ".png", invDepthImage);
+  // cv::imwrite("/app/Results/ESVO/MVSEC/indoor_flying3/inv/" + timestamp + ".png", invDepthImage);
+  cv::imwrite("/app/Results/ESVO/RPG/monitor/inv/" + timestamp + ".png", invDepthImage);
+
 
   visualizor_.plot_map(depthMapPtr, tools::StdVarMap,stdVarImage,
                        stdVar_vis_threshold_, 0.0, stdVar_vis_threshold_);

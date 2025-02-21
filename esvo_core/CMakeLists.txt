@@ -10,7 +10,7 @@ find_package(catkin_simple REQUIRED)
 catkin_simple(ALL_DEPS_REQUIRED)
 
 find_package(OpenCV REQUIRED)
-
+find_package(HDF5 REQUIRED COMPONENTS C CXX)
 ###########
 ## Build ##
 ###########
@@ -60,18 +60,19 @@ set(SOURCES
   src/tools/cayley.cpp)
 
 cs_add_library(${PROJECT_NAME}_LIB ${SOURCES} ${HEADERS})
+include_directories(${HDF5_INCLUDE_DIRS})
 
 # Node esvo_Mapping
 cs_add_executable(esvo_Mapping src/esvo_MappingNode.cpp
     src/esvo_Mapping.cpp include/esvo_core/esvo_Mapping.h)
 target_link_libraries(esvo_Mapping ${PROJECT_NAME}_LIB
-    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
+    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp ${HDF5_LIBRARIES})
 
 # Node esvo_Tracking
 cs_add_executable(esvo_Tracking src/esvo_TrackingNode.cpp
     src/esvo_Tracking.cpp include/esvo_core/esvo_Tracking.h)
 target_link_libraries(esvo_Tracking ${PROJECT_NAME}_LIB
-    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
+    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp ${HDF5_LIBRARIES})
 
 # Node esvo_MVS (newly added in branch "mvs")
 cs_add_executable(esvo_MVStereo
@@ -79,4 +80,4 @@ cs_add_executable(esvo_MVStereo
     src/esvo_MVStereo.cpp
     include/esvo_core/esvo_MVStereo.h)
 target_link_libraries(esvo_MVStereo ${PROJECT_NAME}_LIB
-    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
+    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp -lhdf5_serial -lhdf5_cpp)

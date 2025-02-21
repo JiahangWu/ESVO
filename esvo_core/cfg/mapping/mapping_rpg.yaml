@@ -1,4 +1,4 @@
-invDepth_min_range: 0.2
+invDepth_min_range: 0.1
 invDepth_max_range: 2
 residual_vis_threshold: 20
 stdVar_vis_threshold: 0.015
@@ -13,7 +13,8 @@ SmoothTimeSurface: False
 Regularization: True
 bVisualizeGlobalPC: True
 visualizeGPC_interval: 3
-NumGPC_added_per_refresh: 1000
+# NumGPC_added_per_refresh: 1000
+NumGPC_added_oper_refresh: 1000
 visualize_range: 5.0
 PROCESS_EVENT_NUM: 1000
 TS_HISTORY_LENGTH: 100

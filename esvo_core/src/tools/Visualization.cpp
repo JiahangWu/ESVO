@@ -30,7 +30,7 @@ Visualization::plot_map(
     {
       for (auto it = depthMapPtr->begin(); it != depthMapPtr->end(); it++)
       {
-        if (it->valid() && it->variance() < pow(visualization_threshold1, 2)
+        if (it->valid()
             && it->age() >= (int) visualization_threshold2)
           DrawPoint(it->invDepth(), max_range, min_range, it->x(), img);
       }
